@@ -1,0 +1,1370 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Attendance Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Excel Reading and Writing -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Tile Animations & Custom Styling */
+        .student-tile {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .student-tile:active {
+            transform: scale(0.96);
+        }
+        
+        /* Modal Backdrop Fade */
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 flex flex-col md:flex-row antialiased">
+
+    <!-- Mobile Navigation Bar -->
+    <div class="md:hidden bg-slate-900 text-white flex items-center justify-between p-4 sticky top-0 z-30 shadow-md">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-clipboard-user text-sky-400 text-xl"></i>
+            <span class="font-bold text-lg tracking-tight">AttendEase</span>
+        </div>
+        <button id="mobileMenuBtn" class="p-2 text-slate-300 hover:text-white focus:outline-none">
+            <i class="fa-solid fa-bars text-xl"></i>
+        </button>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col justify-between shadow-xl md:static md:shadow-none">
+        <div>
+            <!-- Sidebar Header -->
+            <div class="p-6 hidden md:flex items-center space-x-3 border-b border-slate-800">
+                <div class="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-400/30 flex items-center justify-center text-sky-400">
+                    <i class="fa-solid fa-clipboard-user text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-white text-lg leading-tight">AttendEase</h1>
+                    <p class="text-xs text-slate-500">Offline Attendance Hub</p>
+                </div>
+            </div>
+
+            <!-- Active Class Switcher Bar -->
+            <div class="p-4 mx-3 my-4 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Active Classroom</label>
+                <div class="flex items-center justify-between">
+                    <select id="classSelector" class="w-full bg-slate-900 text-white text-sm rounded-lg p-2 border border-slate-700 focus:outline-none focus:border-sky-500 transition">
+                        <option value="" disabled selected>No Classes Available</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="px-3 space-y-1">
+                <button onclick="navTo('take-attendance')" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white" data-target="take-attendance">
+                    <i class="fa-solid fa-calendar-check text-slate-400 w-5"></i>
+                    <span>Take Attendance</span>
+                </button>
+                <button onclick="navTo('classrooms')" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white" data-target="classrooms">
+                    <i class="fa-solid fa-chalkboard-user text-slate-400 w-5"></i>
+                    <span>Manage Classes</span>
+                </button>
+                <button onclick="navTo('roster')" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white" data-target="roster">
+                    <i class="fa-solid fa-users text-slate-400 w-5"></i>
+                    <span>Student Roster</span>
+                </button>
+                <button onclick="navTo('records')" class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition text-slate-300 hover:bg-slate-800 hover:text-white" data-target="records">
+                    <i class="fa-solid fa-chart-line text-slate-400 w-5"></i>
+                    <span>View Records</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Sidebar Footer Action -->
+        <div class="p-4 border-t border-slate-800 space-y-2">
+            <button id="exportDataBtn" onclick="exportClassroomData()" class="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-4 rounded-lg text-sm font-medium transition shadow-sm">
+                <i class="fa-solid fa-file-excel"></i>
+                <span>Export Data (.xlsx)</span>
+            </button>
+            <div class="text-center pt-1">
+                <span class="inline-flex items-center text-xs text-slate-500">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                    Offline Mode Active
+                </span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Overlay backdrop for mobile menu -->
+    <div id="sidebarBackdrop" class="fixed inset-0 bg-slate-900/50 z-30 hidden md:hidden"></div>
+
+    <!-- Main Content Workspace -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto bg-slate-50">
+        
+        <!-- SECTION 1: TAKE ATTENDANCE VIEW -->
+        <section id="view-take-attendance" class="app-view p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center space-x-2 text-sky-600 font-semibold text-sm mb-1">
+                        <i class="fa-solid fa-circle-dot text-xs"></i>
+                        <span>Live Session</span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-900" id="sessionClassName">Select a Class</h2>
+                    <p class="text-sm text-slate-500 flex items-center mt-1">
+                        <i class="fa-regular fa-clock mr-1.5 text-slate-400"></i>
+                        <span id="sessionTimestamp">--</span>
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <button onclick="markAllStatus('present')" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 hover:bg-emerald-100 transition">
+                        <i class="fa-solid fa-check-double mr-1.5"></i>Mark All Present
+                    </button>
+                    <button onclick="markAllStatus('absent')" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100 transition">
+                        <i class="fa-solid fa-user-xmark mr-1.5"></i>Mark All Absent
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tile Counter & Search Bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center space-x-4 text-sm font-medium">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-200/70 text-slate-700">
+                        Total: <strong id="totalTileCount" class="ml-1 text-slate-900">0</strong>
+                    </span>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100/70 text-emerald-800">
+                        Present: <strong id="presentTileCount" class="ml-1 text-emerald-900">0</strong>
+                    </span>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-rose-100/70 text-rose-800">
+                        Absent: <strong id="absentTileCount" class="ml-1 text-rose-900">0</strong>
+                    </span>
+                </div>
+
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="attendanceSearch" placeholder="Filter by roll or name..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition shadow-sm">
+                </div>
+            </div>
+
+            <!-- Student Tiles Grid -->
+            <div id="attendanceGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <!-- Tiles populated dynamically -->
+            </div>
+
+            <!-- Submit Attendance Floating Bar / Container -->
+            <div class="sticky bottom-4 z-20 bg-white/90 backdrop-blur-md border border-slate-200/80 p-4 rounded-2xl shadow-xl flex items-center justify-between gap-4">
+                <div class="text-xs sm:text-sm text-slate-500">
+                    <i class="fa-solid fa-circle-info text-sky-500 mr-1"></i> Tap any tile to toggle status
+                </div>
+                <button onclick="submitAttendanceSession()" class="px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-xl shadow-lg shadow-sky-600/20 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>Submit Attendance</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- SECTION 2: CLASSROOM MANAGEMENT -->
+        <section id="view-classrooms" class="app-view hidden p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Classroom Manager</h2>
+                    <p class="text-sm text-slate-500 mt-1">Create, edit, or select active teaching sections</p>
+                </div>
+                <button onclick="openModal('addClassModal')" class="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-xl shadow-sm transition flex items-center space-x-2">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Classroom</span>
+                </button>
+            </div>
+
+            <!-- Classrooms List Cards -->
+            <div id="classroomsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Classroom Cards dynamically inserted -->
+            </div>
+        </section>
+
+        <!-- SECTION 3: STUDENT ROSTER VIEW -->
+        <section id="view-roster" class="app-view hidden p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Student Roster</h2>
+                    <p class="text-sm text-slate-500 mt-1" id="rosterSubheading">Manage student roster for active class</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <button onclick="downloadSampleTemplate()" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                        <i class="fa-solid fa-download mr-1.5 text-slate-500"></i>Excel Template
+                    </button>
+                    <button onclick="populateSampleStudents()" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1.5 text-indigo-500"></i>Demo Roster
+                    </button>
+                    <label class="px-3.5 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-sm transition inline-flex items-center">
+                        <i class="fa-solid fa-file-import mr-1.5"></i>Import Excel/CSV
+                        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelImport(event)">
+                    </label>
+                    <button onclick="openModal('addStudentModal')" class="px-3.5 py-2 text-sm font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white shadow-sm transition">
+                        <i class="fa-solid fa-user-plus mr-1.5"></i>Add Student
+                    </button>
+                </div>
+            </div>
+
+            <!-- Roster Table Card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="text-sm font-semibold text-slate-700">
+                        Total Enrolled: <span id="rosterCount" class="text-sky-600 font-bold">0</span> Students
+                    </div>
+                    <div class="relative w-full sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="rosterSearch" placeholder="Search student name or roll..." class="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 font-semibold text-xs uppercase tracking-wider border-b border-slate-100">
+                                <th class="p-4 pl-6">Roll / ID</th>
+                                <th class="p-4">Student Name</th>
+                                <th class="p-4 text-right pr-6">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rosterTableBody" class="divide-y divide-slate-100 text-sm">
+                            <!-- Dynamically generated rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: RECORDS & SUMMARY VIEW -->
+        <section id="view-records" class="app-view hidden p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Attendance Records & Analytics</h2>
+                    <p class="text-sm text-slate-500 mt-1">Explore session logs or review student performance percentage</p>
+                </div>
+
+                <!-- Toggle Buttons between Views -->
+                <div class="inline-flex p-1 bg-slate-200/70 rounded-xl space-x-1">
+                    <button id="btnTabDatewise" onclick="switchRecordsTab('datewise')" class="px-4 py-2 rounded-lg text-xs font-semibold transition bg-white text-slate-900 shadow-sm">
+                        <i class="fa-regular fa-calendar-days mr-1.5"></i>Date-wise Sessions
+                    </button>
+                    <button id="btnTabStudentwise" onclick="switchRecordsTab('studentwise')" class="px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-600 hover:text-slate-900">
+                        <i class="fa-solid fa-chart-user mr-1.5"></i>Student Breakdown
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUB-TAB 1: DATE-WISE SESSIONS -->
+            <div id="recordsDatewise" class="space-y-4">
+                <div id="sessionsList" class="space-y-3">
+                    <!-- Dynamic session list cards -->
+                </div>
+            </div>
+
+            <!-- SUB-TAB 2: STUDENT-WISE BREAKDOWN -->
+            <div id="recordsStudentwise" class="hidden space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-500 font-semibold text-xs uppercase tracking-wider border-b border-slate-100">
+                                    <th class="p-4 pl-6">Roll / ID</th>
+                                    <th class="p-4">Student Name</th>
+                                    <th class="p-4 text-center">Attended / Total</th>
+                                    <th class="p-4">Attendance Bar</th>
+                                    <th class="p-4 text-right pr-6">Status Badge</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentWiseTableBody" class="divide-y divide-slate-100 text-sm">
+                                <!-- Dynamic Student Stats -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: ADD / EDIT CLASSROOM -->
+    <div id="addClassModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-lg text-slate-900" id="classModalTitle">Create Classroom</h3>
+                <button onclick="closeModal('addClassModal')" class="text-slate-400 hover:text-slate-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="classForm" onsubmit="handleSaveClassroom(event)" class="space-y-4">
+                <input type="hidden" id="editClassId">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Class Name *</label>
+                    <input type="text" id="classNameInput" required placeholder="e.g. Grade 10 - Mathematics" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Subject / Description</label>
+                    <input type="text" id="classSubjectInput" placeholder="e.g. Algebra & Geometry" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500">
+                </div>
+                <div class="flex items-center justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeModal('addClassModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+                    <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-sm transition">Save Class</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ADD / EDIT STUDENT -->
+    <div id="addStudentModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-lg text-slate-900" id="studentModalTitle">Add Student</h3>
+                <button onclick="closeModal('addStudentModal')" class="text-slate-400 hover:text-slate-600 text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="studentForm" onsubmit="handleSaveStudent(event)" class="space-y-4">
+                <input type="hidden" id="editStudentId">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Roll No / ID *</label>
+                    <input type="text" id="studentRollInput" required placeholder="e.g. 101 or STU-001" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Full Name *</label>
+                    <input type="text" id="studentNameInput" required placeholder="e.g. Jane Doe" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500">
+                </div>
+                <div class="flex items-center justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeModal('addStudentModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+                    <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-sm transition">Save Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: SESSION DETAIL & EDIT -->
+    <div id="sessionEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 class="font-bold text-lg text-slate-900" id="sessionEditTitle">Session Details</h3>
+                    <p class="text-xs text-slate-500" id="sessionEditTimestamp">--</p>
+                </div>
+                <button onclick="closeModal('sessionEditModal')" class="text-slate-400 hover:text-slate-600 text-lg p-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+                    <span>Tap student tile to toggle status during edit</span>
+                    <div class="space-x-2">
+                        <span class="inline-block w-3 h-3 bg-emerald-500 rounded-full"></span> Present
+                        <span class="inline-block w-3 h-3 bg-rose-500 rounded-full"></span> Absent
+                    </div>
+                </div>
+                <div id="sessionEditGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <!-- Session Tiles dynamically inserted -->
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+                <button onclick="deleteCurrentEditSession()" class="px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition">
+                    <i class="fa-solid fa-trash-can mr-1.5"></i>Delete Session
+                </button>
+                <div class="flex items-center space-x-2">
+                    <button onclick="closeModal('sessionEditModal')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+                    <button onclick="saveSessionEdits()" class="px-5 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-sm transition">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTROLLER -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <script>
+        // --- LOCALSTORAGE APP STATE SCHEMA ---
+        // key: 'attendease_app_data'
+        // {
+        //    activeClassId: string,
+        //    classrooms: [ { id, name, subject, students: [{ id, roll, name }], sessions: [{ id, timestamp, records: { studentId: 'present' | 'absent' } }] } ]
+        // }
+
+        const STORAGE_KEY = 'attendease_app_data_v1';
+        let appData = {
+            activeClassId: null,
+            classrooms: []
+        };
+
+        // In-memory Session State for Live Attendance Taking
+        let liveAttendanceState = {}; // { studentId: 'present' | 'absent' }
+        let currentEditSessionId = null;
+        let tempEditSessionState = {};
+
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadStorageData();
+            setupEventListeners();
+            
+            // Check if initial classrooms exist; if empty, initialize sample
+            if (appData.classrooms.length === 0) {
+                initSampleClassroom();
+            }
+            
+            updateClassSelector();
+            renderAllViews();
+            
+            // Set initial session timestamp clock
+            updateSessionClock();
+            setInterval(updateSessionClock, 30000); // update every 30s
+        });
+
+        function loadStorageData() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                if (data) {
+                    appData = JSON.parse(data);
+                }
+            } catch (e) {
+                console.error("Failed to load local storage:", e);
+                showToast("Error loading saved data", "error");
+            }
+        }
+
+        function saveStorageData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+            } catch (e) {
+                console.error("Failed to save data:", e);
+                showToast("Storage error! Disk may be full.", "error");
+            }
+        }
+
+        function initSampleClassroom() {
+            const sampleClass = {
+                id: 'cls_' + Date.now(),
+                name: 'Mathematics 101',
+                subject: 'Algebra & Fundamentals',
+                students: [
+                    { id: 'st_1', roll: '101', name: 'Alexander Wright' },
+                    { id: 'st_2', roll: '102', name: 'Brianna Smith' },
+                    { id: 'st_3', roll: '103', name: 'Carlos Vance' },
+                    { id: 'st_4', roll: '104', name: 'Diana Prince' },
+                    { id: 'st_5', roll: '105', name: 'Ethan Hunt' },
+                    { id: 'st_6', roll: '106', name: 'Fiona Gallagher' }
+                ],
+                sessions: []
+            };
+            appData.classrooms.push(sampleClass);
+            appData.activeClassId = sampleClass.id;
+            saveStorageData();
+        }
+
+        function getActiveClass() {
+            return appData.classrooms.find(c => c.id === appData.activeClassId) || appData.classrooms[0] || null;
+        }
+
+        // --- NAVIGATION & ROUTING ---
+        function navTo(targetView) {
+            document.querySelectorAll('.app-view').forEach(view => view.classList.add('hidden'));
+            const target = document.getElementById(`view-${targetView}`);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                if (btn.getAttribute('data-target') === targetView) {
+                    btn.classList.add('bg-sky-600', 'text-white');
+                    btn.classList.remove('text-slate-300', 'hover:bg-slate-800');
+                } else {
+                    btn.classList.remove('bg-sky-600', 'text-white');
+                    btn.classList.add('text-slate-300', 'hover:bg-slate-800');
+                }
+            });
+
+            // Close mobile menu if open
+            closeMobileMenu();
+
+            // Refresh target view specific dynamic contents
+            if (targetView === 'take-attendance') initTakeAttendanceView();
+            if (targetView === 'classrooms') renderClassroomsList();
+            if (targetView === 'roster') renderRosterTable();
+            if (targetView === 'records') renderRecordsView();
+        }
+
+        // Mobile Sidebar Toggle Logic
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+
+        mobileMenuBtn.addEventListener('click', () => {
+            sidebar.classList.remove('-translate-x-full');
+            sidebarBackdrop.classList.remove('hidden');
+        });
+
+        sidebarBackdrop.addEventListener('click', closeMobileMenu);
+
+        function closeMobileMenu() {
+            sidebar.classList.add('-translate-x-full');
+            sidebarBackdrop.classList.add('hidden');
+        }
+
+        function updateClassSelector() {
+            const selector = document.getElementById('classSelector');
+            selector.innerHTML = '';
+
+            if (appData.classrooms.length === 0) {
+                selector.innerHTML = '<option value="" disabled selected>No Classes</option>';
+                appData.activeClassId = null;
+                return;
+            }
+
+            appData.classrooms.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls.id;
+                opt.textContent = cls.name;
+                if (cls.id === appData.activeClassId) opt.selected = true;
+                selector.appendChild(opt);
+            });
+
+            if (!appData.activeClassId && appData.classrooms.length > 0) {
+                appData.activeClassId = appData.classrooms[0].id;
+            }
+        }
+
+        document.getElementById('classSelector').addEventListener('change', (e) => {
+            appData.activeClassId = e.target.value;
+            saveStorageData();
+            renderAllViews();
+            showToast("Active class updated", "info");
+        });
+
+        function renderAllViews() {
+            initTakeAttendanceView();
+            renderClassroomsList();
+            renderRosterTable();
+            renderRecordsView();
+        }
+
+        // --- 1. TAKE ATTENDANCE LOGIC ---
+        function updateSessionClock() {
+            const now = new Date();
+            const formatted = now.toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+            }) + ' at ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            
+            document.getElementById('sessionTimestamp').textContent = formatted;
+        }
+
+        function initTakeAttendanceView() {
+            const currentClass = getActiveClass();
+            const grid = document.getElementById('attendanceGrid');
+            const sessionTitle = document.getElementById('sessionClassName');
+            grid.innerHTML = '';
+
+            if (!currentClass) {
+                sessionTitle.textContent = "No Active Classroom Selected";
+                return;
+            }
+
+            sessionTitle.textContent = currentClass.name;
+
+            // Reset live state to 'present' for all students by default
+            liveAttendanceState = {};
+            currentClass.students.forEach(st => {
+                liveAttendanceState[st.id] = 'present';
+            });
+
+            renderAttendanceTiles();
+        }
+
+        function renderAttendanceTiles() {
+            const currentClass = getActiveClass();
+            const grid = document.getElementById('attendanceGrid');
+            const searchVal = document.getElementById('attendanceSearch').value.toLowerCase();
+            grid.innerHTML = '';
+
+            if (!currentClass || currentClass.students.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                        <i class="fa-solid fa-users-slash text-3xl text-slate-300 mb-2"></i>
+                        <p class="text-slate-500 font-medium text-sm">No students found in this roster.</p>
+                        <button onclick="navTo('roster')" class="mt-3 text-xs text-sky-600 font-semibold hover:underline">Add or Import Students →</button>
+                    </div>
+                `;
+                updateTileCounts();
+                return;
+            }
+
+            const filtered = currentClass.students.filter(st => 
+                st.name.toLowerCase().includes(searchVal) || st.roll.toLowerCase().includes(searchVal)
+            );
+
+            filtered.forEach(st => {
+                const status = liveAttendanceState[st.id] || 'present';
+                const isPresent = status === 'present';
+
+                const tile = document.createElement('div');
+                tile.className = `student-tile relative p-4 rounded-2xl border cursor-pointer flex flex-col justify-between h-32 shadow-sm ${
+                    isPresent 
+                    ? 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/10' 
+                    : 'bg-rose-500 text-white border-rose-600 shadow-rose-500/10'
+                }`;
+
+                tile.onclick = () => toggleStudentTile(st.id);
+
+                tile.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${isPresent ? 'bg-emerald-600/60' : 'bg-rose-600/60'}">
+                            #${st.roll}
+                        </span>
+                        <i class="fa-solid ${isPresent ? 'fa-circle-check text-emerald-200' : 'fa-circle-xmark text-rose-200'} text-lg"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm line-clamp-1 leading-snug">${st.name}</h4>
+                        <span class="text-[11px] font-semibold tracking-wider uppercase opacity-90">${status}</span>
+                    </div>
+                `;
+
+                grid.appendChild(tile);
+            });
+
+            updateTileCounts();
+        }
+
+        function toggleStudentTile(studentId) {
+            liveAttendanceState[studentId] = liveAttendanceState[studentId] === 'present' ? 'absent' : 'present';
+            renderAttendanceTiles();
+        }
+
+        function markAllStatus(status) {
+            const currentClass = getActiveClass();
+            if (!currentClass) return;
+            currentClass.students.forEach(st => {
+                liveAttendanceState[st.id] = status;
+            });
+            renderAttendanceTiles();
+            showToast(`Marked all students as ${status.toUpperCase()}`, "info");
+        }
+
+        function updateTileCounts() {
+            const currentClass = getActiveClass();
+            if (!currentClass) return;
+
+            const total = currentClass.students.length;
+            let present = 0;
+            let absent = 0;
+
+            Object.values(liveAttendanceState).forEach(stVal => {
+                if (stVal === 'present') present++;
+                if (stVal === 'absent') absent++;
+            });
+
+            document.getElementById('totalTileCount').textContent = total;
+            document.getElementById('presentTileCount').textContent = present;
+            document.getElementById('absentTileCount').textContent = absent;
+        }
+
+        document.getElementById('attendanceSearch').addEventListener('input', renderAttendanceTiles);
+
+        function submitAttendanceSession() {
+            const currentClass = getActiveClass();
+            if (!currentClass || currentClass.students.length === 0) {
+                showToast("Cannot submit empty class session", "error");
+                return;
+            }
+
+            const now = new Date();
+            const timestampFormatted = now.toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric'
+            }) + ', ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            const newSession = {
+                id: 'sess_' + Date.now(),
+                timestamp: timestampFormatted,
+                records: { ...liveAttendanceState }
+            };
+
+            currentClass.sessions.unshift(newSession); // Add to beginning of array
+            saveStorageData();
+
+            showToast("Attendance saved successfully!", "success");
+            navTo('records');
+        }
+
+        // --- 2. CLASSROOM MANAGER LOGIC ---
+        function renderClassroomsList() {
+            const container = document.getElementById('classroomsList');
+            container.innerHTML = '';
+
+            if (appData.classrooms.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                        <p class="text-slate-500 font-medium text-sm">No classrooms created yet.</p>
+                        <button onclick="openModal('addClassModal')" class="mt-3 text-xs bg-sky-600 text-white px-3 py-1.5 rounded-lg">Create First Class</button>
+                    </div>
+                `;
+                return;
+            }
+
+            appData.classrooms.forEach(cls => {
+                const isActive = cls.id === appData.activeClassId;
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-2xl p-5 border transition shadow-sm flex flex-col justify-between ${
+                    isActive ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200 hover:border-slate-300'
+                }`;
+
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-start justify-between">
+                            <span class="inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
+                                isActive ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'
+                            }">${isActive ? 'Active Class' : 'Inactive'}</span>
+                            <div class="flex items-center space-x-1">
+                                <button onclick="editClassroom('${cls.id}')" class="p-1.5 text-slate-400 hover:text-sky-600 text-xs">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="deleteClassroom('${cls.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 text-xs">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <h3 class="font-bold text-lg text-slate-900 mt-3">${cls.name}</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">${cls.subject || 'No description'}</p>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div class="text-xs text-slate-500">
+                            <strong>${cls.students.length}</strong> Students | <strong>${cls.sessions.length}</strong> Sessions
+                        </div>
+                        ${!isActive ? `
+                            <button onclick="setActiveClass('${cls.id}')" class="text-xs font-semibold text-sky-600 hover:text-sky-700">Select</button>
+                        ` : ''}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function setActiveClass(id) {
+            appData.activeClassId = id;
+            saveStorageData();
+            updateClassSelector();
+            renderAllViews();
+            showToast("Class switched", "info");
+        }
+
+        function editClassroom(id) {
+            const cls = appData.classrooms.find(c => c.id === id);
+            if (!cls) return;
+            document.getElementById('editClassId').value = cls.id;
+            document.getElementById('classNameInput').value = cls.name;
+            document.getElementById('classSubjectInput').value = cls.subject || '';
+            document.getElementById('classModalTitle').textContent = 'Edit Classroom';
+            openModal('addClassModal');
+        }
+
+        function handleSaveClassroom(e) {
+            e.preventDefault();
+            const id = document.getElementById('editClassId').value;
+            const name = document.getElementById('classNameInput').value.trim();
+            const subject = document.getElementById('classSubjectInput').value.trim();
+
+            if (id) {
+                const cls = appData.classrooms.find(c => c.id === id);
+                if (cls) {
+                    cls.name = name;
+                    cls.subject = subject;
+                }
+            } else {
+                const newCls = {
+                    id: 'cls_' + Date.now(),
+                    name,
+                    subject,
+                    students: [],
+                    sessions: []
+                };
+                appData.classrooms.push(newCls);
+                if (!appData.activeClassId) appData.activeClassId = newCls.id;
+            }
+
+            saveStorageData();
+            updateClassSelector();
+            renderAllViews();
+            closeModal('addClassModal');
+            showToast("Classroom saved!", "success");
+        }
+
+        function deleteClassroom(id) {
+            if (!confirm("Are you sure you want to delete this classroom and all its attendance records?")) return;
+            appData.classrooms = appData.classrooms.filter(c => c.id !== id);
+            if (appData.activeClassId === id) {
+                appData.activeClassId = appData.classrooms[0] ? appData.classrooms[0].id : null;
+            }
+            saveStorageData();
+            updateClassSelector();
+            renderAllViews();
+            showToast("Classroom deleted", "info");
+        }
+
+        // --- 3. ROSTER LOGIC ---
+        function renderRosterTable() {
+            const currentClass = getActiveClass();
+            const tbody = document.getElementById('rosterTableBody');
+            const searchVal = document.getElementById('rosterSearch').value.toLowerCase();
+            tbody.innerHTML = '';
+
+            if (!currentClass) {
+                document.getElementById('rosterSubheading').textContent = "No active class selected";
+                document.getElementById('rosterCount').textContent = "0";
+                return;
+            }
+
+            document.getElementById('rosterSubheading').textContent = `Showing enrolled students for ${currentClass.name}`;
+            document.getElementById('rosterCount').textContent = currentClass.students.length;
+
+            const filtered = currentClass.students.filter(st => 
+                st.name.toLowerCase().includes(searchVal) || st.roll.toLowerCase().includes(searchVal)
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="p-8 text-center text-slate-400 text-sm">
+                            No matching students found in this roster.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filtered.forEach(st => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition";
+                tr.innerHTML = `
+                    <td class="p-4 pl-6 font-semibold text-slate-900">${st.roll}</td>
+                    <td class="p-4 font-medium text-slate-700">${st.name}</td>
+                    <td class="p-4 text-right pr-6 space-x-2">
+                        <button onclick="editStudent('${st.id}')" class="text-slate-400 hover:text-sky-600 text-xs">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="deleteStudent('${st.id}')" class="text-slate-400 hover:text-rose-600 text-xs">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('rosterSearch').addEventListener('input', renderRosterTable);
+
+        function handleSaveStudent(e) {
+            e.preventDefault();
+            const currentClass = getActiveClass();
+            if (!currentClass) {
+                showToast("Please select an active class first", "error");
+                return;
+            }
+
+            const id = document.getElementById('editStudentId').value;
+            const roll = document.getElementById('studentRollInput').value.trim();
+            const name = document.getElementById('studentNameInput').value.trim();
+
+            if (id) {
+                const st = currentClass.students.find(s => s.id === id);
+                if (st) {
+                    st.roll = roll;
+                    st.name = name;
+                }
+            } else {
+                currentClass.students.push({
+                    id: 'st_' + Date.now() + Math.random().toString(36).substr(2, 4),
+                    roll,
+                    name
+                });
+            }
+
+            saveStorageData();
+            renderAllViews();
+            closeModal('addStudentModal');
+            showToast("Student updated!", "success");
+        }
+
+        function editStudent(id) {
+            const currentClass = getActiveClass();
+            if (!currentClass) return;
+            const st = currentClass.students.find(s => s.id === id);
+            if (!st) return;
+
+            document.getElementById('editStudentId').value = st.id;
+            document.getElementById('studentRollInput').value = st.roll;
+            document.getElementById('studentNameInput').value = st.name;
+            document.getElementById('studentModalTitle').textContent = 'Edit Student';
+            openModal('addStudentModal');
+        }
+
+        function deleteStudent(id) {
+            const currentClass = getActiveClass();
+            if (!currentClass || !confirm("Remove this student from the roster?")) return;
+
+            currentClass.students = currentClass.students.filter(s => s.id !== id);
+            saveStorageData();
+            renderAllViews();
+            showToast("Student removed", "info");
+        }
+
+        function populateSampleStudents() {
+            const currentClass = getActiveClass();
+            if (!currentClass) {
+                showToast("Create a classroom first!", "error");
+                return;
+            }
+
+            const demos = [
+                { roll: '101', name: 'Alexander Wright' },
+                { roll: '102', name: 'Brianna Smith' },
+                { roll: '103', name: 'Carlos Vance' },
+                { roll: '104', name: 'Diana Prince' },
+                { roll: '105', name: 'Ethan Hunt' },
+                { roll: '106', name: 'Fiona Gallagher' },
+                { roll: '107', name: 'George Miller' },
+                { roll: '108', name: 'Hannah Abbott' }
+            ];
+
+            demos.forEach(d => {
+                if (!currentClass.students.some(s => s.roll === d.roll)) {
+                    currentClass.students.push({
+                        id: 'st_' + Date.now() + Math.random().toString(36).substr(2, 4),
+                        roll: d.roll,
+                        name: d.name
+                    });
+                }
+            });
+
+            saveStorageData();
+            renderAllViews();
+            showToast("Demo students populated!", "success");
+        }
+
+        // --- EXCEL IMPORT / EXPORT LOGIC ---
+        function downloadSampleTemplate() {
+            const sampleData = [
+                { "Roll No": "101", "Student Name": "John Doe" },
+                { "Roll No": "102", "Student Name": "Jane Smith" },
+                { "Roll No": "103", "Student Name": "Robert Johnson" }
+            ];
+
+            const worksheet = XLSX.utils.json_to_sheet(sampleData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Student Template");
+            XLSX.writeFile(workbook, "Attendance_Student_Template.xlsx");
+        }
+
+        function handleExcelImport(event) {
+            const file = event.target.files[0];
+            const currentClass = getActiveClass();
+
+            if (!currentClass) {
+                showToast("Select or create a classroom first!", "error");
+                return;
+            }
+
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (json.length < 2) {
+                        showToast("Excel file appears to be empty", "error");
+                        return;
+                    }
+
+                    // Attempt header resolution
+                    let rollIdx = -1;
+                    let nameIdx = -1;
+
+                    const headers = json[0].map(h => String(h).toLowerCase().trim());
+                    headers.forEach((h, idx) => {
+                        if (h.includes('roll') || h.includes('id')) rollIdx = idx;
+                        if (h.includes('name') || h.includes('student')) nameIdx = idx;
+                    });
+
+                    if (rollIdx === -1) rollIdx = 0;
+                    if (nameIdx === -1) nameIdx = 1;
+
+                    let addedCount = 0;
+                    for (let i = 1; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row[rollIdx] || !row[nameIdx]) continue;
+
+                        const roll = String(row[rollIdx]).trim();
+                        const name = String(row[nameIdx]).trim();
+
+                        // Avoid duplicate rolls in same class
+                        if (!currentClass.students.some(s => s.roll === roll)) {
+                            currentClass.students.push({
+                                id: 'st_' + Date.now() + Math.random().toString(36).substr(2, 4),
+                                roll,
+                                name
+                            });
+                            addedCount++;
+                        }
+                    }
+
+                    saveStorageData();
+                    renderAllViews();
+                    showToast(`Imported ${addedCount} new students!`, "success");
+
+                } catch (err) {
+                    console.error("Excel import error:", err);
+                    showToast("Error processing Excel file", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = ''; // Reset input
+        }
+
+        function exportClassroomData() {
+            const currentClass = getActiveClass();
+            if (!currentClass) {
+                showToast("No active classroom data to export", "error");
+                return;
+            }
+
+            // Sheet 1: Master Summary
+            const summaryRows = currentClass.students.map(st => {
+                const totalSessions = currentClass.sessions.length;
+                let attended = 0;
+
+                currentClass.sessions.forEach(sess => {
+                    if (sess.records[st.id] === 'present') attended++;
+                });
+
+                const pct = totalSessions > 0 ? ((attended / totalSessions) * 100).toFixed(1) : '0.0';
+
+                return {
+                    "Roll No / ID": st.roll,
+                    "Student Name": st.name,
+                    "Attended": attended,
+                    "Total Sessions": totalSessions,
+                    "Attendance %": `${pct}%`
+                };
+            });
+
+            // Sheet 2: Detailed Date-wise Log
+            const detailRows = [];
+            currentClass.sessions.forEach(sess => {
+                currentClass.students.forEach(st => {
+                    detailRows.push({
+                        "Session Date": sess.timestamp,
+                        "Roll No": st.roll,
+                        "Student Name": st.name,
+                        "Status": (sess.records[st.id] || 'present').toUpperCase()
+                    });
+                });
+            });
+
+            const wb = XLSX.utils.book_new();
+            const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+            const wsDetails = XLSX.utils.json_to_sheet(detailRows);
+
+            XLSX.utils.book_append_sheet(wb, wsSummary, "Student Summary");
+            XLSX.utils.book_append_sheet(wb, wsDetails, "Session Logs");
+
+            const fileName = `${currentClass.name.replace(/[^a-z0-9]/gi, '_')}_Attendance.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast("Exporting Excel file...", "info");
+        }
+
+        // --- 4. VIEW & FILTER RECORDS LOGIC ---
+        function switchRecordsTab(tab) {
+            const datewiseContainer = document.getElementById('recordsDatewise');
+            const studentwiseContainer = document.getElementById('recordsStudentwise');
+            const btnDate = document.getElementById('btnTabDatewise');
+            const btnStudent = document.getElementById('btnTabStudentwise');
+
+            if (tab === 'datewise') {
+                datewiseContainer.classList.remove('hidden');
+                studentwiseContainer.classList.add('hidden');
+                btnDate.className = "px-4 py-2 rounded-lg text-xs font-semibold transition bg-white text-slate-900 shadow-sm";
+                btnStudent.className = "px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-600 hover:text-slate-900";
+            } else {
+                datewiseContainer.classList.add('hidden');
+                studentwiseContainer.classList.remove('hidden');
+                btnStudent.className = "px-4 py-2 rounded-lg text-xs font-semibold transition bg-white text-slate-900 shadow-sm";
+                btnDate.className = "px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-600 hover:text-slate-900";
+            }
+        }
+
+        function renderRecordsView() {
+            renderDatewiseSessions();
+            renderStudentwiseBreakdown();
+        }
+
+        function renderDatewiseSessions() {
+            const currentClass = getActiveClass();
+            const container = document.getElementById('sessionsList');
+            container.innerHTML = '';
+
+            if (!currentClass || currentClass.sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                        <i class="fa-regular fa-folder-open text-3xl text-slate-300 mb-2"></i>
+                        <p class="text-slate-500 font-medium text-sm">No attendance sessions recorded yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            currentClass.sessions.forEach(sess => {
+                let presentCount = 0;
+                let absentCount = 0;
+
+                Object.values(sess.records).forEach(stVal => {
+                    if (stVal === 'present') presentCount++;
+                    if (stVal === 'absent') absentCount++;
+                });
+
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-2xl p-4 border border-slate-200/80 hover:border-slate-300 transition shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4";
+
+                card.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-calendar-day"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">${sess.timestamp}</h4>
+                            <div class="flex items-center space-x-3 mt-0.5 text-xs">
+                                <span class="text-emerald-600 font-semibold"><i class="fa-solid fa-circle text-[8px] mr-1"></i>${presentCount} Present</span>
+                                <span class="text-rose-600 font-semibold"><i class="fa-solid fa-circle text-[8px] mr-1"></i>${absentCount} Absent</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openSessionEditModal('${sess.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition">
+                            <i class="fa-solid fa-pen-to-square mr-1"></i>View / Edit
+                        </button>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function renderStudentwiseBreakdown() {
+            const currentClass = getActiveClass();
+            const tbody = document.getElementById('studentWiseTableBody');
+            tbody.innerHTML = '';
+
+            if (!currentClass || currentClass.students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 text-sm">No student data available.</td></tr>`;
+                return;
+            }
+
+            const totalSessions = currentClass.sessions.length;
+
+            currentClass.students.forEach(st => {
+                let attended = 0;
+                currentClass.sessions.forEach(sess => {
+                    if (sess.records[st.id] === 'present') attended++;
+                });
+
+                const pct = totalSessions > 0 ? Math.round((attended / totalSessions) * 100) : 0;
+                const isGood = pct >= 75;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition";
+                tr.innerHTML = `
+                    <td class="p-4 pl-6 font-semibold text-slate-900">${st.roll}</td>
+                    <td class="p-4 font-medium text-slate-700">${st.name}</td>
+                    <td class="p-4 text-center font-semibold text-slate-600">${attended} / ${totalSessions}</td>
+                    <td class="p-4 w-48">
+                        <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                            <div class="${isGood ? 'bg-emerald-500' : 'bg-rose-500'} h-2.5 rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                    </td>
+                    <td class="p-4 text-right pr-6">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                            isGood ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }">
+                            ${pct}%
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- SESSION EDIT MODAL LOGIC ---
+        function openSessionEditModal(sessionId) {
+            const currentClass = getActiveClass();
+            if (!currentClass) return;
+
+            const sess = currentClass.sessions.find(s => s.id === sessionId);
+            if (!sess) return;
+
+            currentEditSessionId = sessionId;
+            tempEditSessionState = { ...sess.records };
+
+            document.getElementById('sessionEditTimestamp').textContent = sess.timestamp;
+            renderSessionEditTiles();
+            openModal('sessionEditModal');
+        }
+
+        function renderSessionEditTiles() {
+            const currentClass = getActiveClass();
+            const grid = document.getElementById('sessionEditGrid');
+            grid.innerHTML = '';
+
+            currentClass.students.forEach(st => {
+                const status = tempEditSessionState[st.id] || 'present';
+                const isPresent = status === 'present';
+
+                const tile = document.createElement('div');
+                tile.className = `p-3 rounded-xl border cursor-pointer transition ${
+                    isPresent ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`;
+
+                tile.onclick = () => {
+                    tempEditSessionState[st.id] = tempEditSessionState[st.id] === 'present' ? 'absent' : 'present';
+                    renderSessionEditTiles();
+                };
+
+                tile.innerHTML = `
+                    <div class="flex items-center justify-between text-xs font-bold mb-1">
+                        <span>#${st.roll}</span>
+                        <i class="fa-solid ${isPresent ? 'fa-check text-emerald-600' : 'fa-xmark text-rose-600'}"></i>
+                    </div>
+                    <div class="text-xs font-bold truncate">${st.name}</div>
+                    <div class="text-[10px] uppercase font-semibold mt-1">${status}</div>
+                `;
+
+                grid.appendChild(tile);
+            });
+        }
+
+        function saveSessionEdits() {
+            const currentClass = getActiveClass();
+            if (!currentClass || !currentEditSessionId) return;
+
+            const sess = currentClass.sessions.find(s => s.id === currentEditSessionId);
+            if (sess) {
+                sess.records = { ...tempEditSessionState };
+                saveStorageData();
+                renderAllViews();
+                showToast("Session records updated!", "success");
+            }
+            closeModal('sessionEditModal');
+        }
+
+        function deleteCurrentEditSession() {
+            const currentClass = getActiveClass();
+            if (!currentClass || !currentEditSessionId || !confirm("Delete this entire session record?")) return;
+
+            currentClass.sessions = currentClass.sessions.filter(s => s.id !== currentEditSessionId);
+            saveStorageData();
+            renderAllViews();
+            closeModal('sessionEditModal');
+            showToast("Session deleted", "info");
+        }
+
+        // --- MODAL UTILITIES ---
+        function openModal(modalId) {
+            const m = document.getElementById(modalId);
+            if (m) m.classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            const m = document.getElementById(modalId);
+            if (m) m.classList.add('hidden');
+            
+            // Reset modal form fields
+            if (modalId === 'addClassModal') {
+                document.getElementById('editClassId').value = '';
+                document.getElementById('classForm').reset();
+                document.getElementById('classModalTitle').textContent = 'Create Classroom';
+            }
+            if (modalId === 'addStudentModal') {
+                document.getElementById('editStudentId').value = '';
+                document.getElementById('studentForm').reset();
+                document.getElementById('studentModalTitle').textContent = 'Add Student';
+            }
+        }
+
+        function setupEventListeners() {
+            // Close modals when clicking backdrop
+            document.querySelectorAll('.modal-backdrop').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeModal(modal.id);
+                });
+            });
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            let iconClass = 'fa-circle-info text-sky-400';
+            if (type === 'success') iconClass = 'fa-circle-check text-emerald-400';
+            if (type === 'error') iconClass = 'fa-circle-exclamation text-rose-400';
+
+            toast.className = "pointer-events-auto flex items-center space-x-3 bg-slate-900 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-xl border border-slate-800 animate-in fade-in slide-in-from-bottom-3 duration-200";
+            toast.innerHTML = `
+                <i class="fa-solid ${iconClass} text-base"></i>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+```
